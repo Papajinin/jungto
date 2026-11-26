@@ -277,4 +277,17 @@ $('thBtns').addEventListener('click', e => {
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyView);
 $('verNo').textContent = APP_VERSION;
+
+// 시작 화면: 그림이 나타나고 약 1.4초 뒤 사라짐
+(function () {
+  const sp = $('splash');
+  if (!sp) return;
+  const img = new Image();
+  let gone = false;
+  const hide = () => { if (gone) return; gone = true; sp.classList.add('out'); setTimeout(() => sp.remove(), 750); };
+  img.onload = () => setTimeout(hide, 1400);
+  img.onerror = hide;
+  img.src = 'splash.jpg';
+  setTimeout(hide, 3500); // 그림이 늦게 오면 기다리지 않음
+})();
 applyView();
