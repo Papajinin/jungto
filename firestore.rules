@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Jungto: 강의 내용은 저작권 자료라 내 구글 계정 하나만 읽고 쓸 수 있음
+// 고친 뒤에는 Firebase 관리 화면 → Firestore → 규칙에 붙여 넣고 "게시"
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isMe() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.email == 'aristo0517@gmail.com';
+    }
+
+    // 강의 (강의마다 문서 하나: 01, 02 …)
+    match /lectures/{n} {
+      allow read, write: if isMe();
+    }
+
+    // 큰 그림 등
+    match /meta/{id} {
+      allow read, write: if isMe();
+    }
+  }
+}

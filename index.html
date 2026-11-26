@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- 홈 화면 앱: 이름은 Jungto -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Jungto">
+  <meta name="theme-color" content="#F7F3EA">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1">
+  <link rel="icon" type="image/png" href="icon-192.png?v=1">
+  <title>Jungto</title>
+  <script>
+    // 새 버전 스스로 받기: 켤 때 서버의 version.txt 숫자가 APP_VERSION보다 크면 새 파일을 받아 한 번 새로고침.
+    // 올릴 때마다 두 숫자를 같이 올린다
+    const APP_VERSION = 1;
+    (function () {
+      const t0 = Date.now();
+      const key = 'jungto.updated';
+      fetch('version.txt?t=' + t0, { cache: 'no-store' })
+        .then(r => r.ok ? r.text() : '')
+        .then(txt => {
+          const v = parseInt(txt, 10);
+          if (!(v > APP_VERSION) || Date.now() - t0 > 4000) return;
+          try { if (sessionStorage.getItem(key) === String(v)) return; sessionStorage.setItem(key, String(v)); } catch (e) { return; }
+          return Promise.all([fetch(location.pathname, { cache: 'reload' }), fetch('index.html', { cache: 'reload' })])
+            .then(() => { if (Date.now() - t0 < 6000) location.reload(); });
+        })
+        .catch(() => {});
+    })();
+    // 밝게·어둡게를 화면 그리기 전에 맞춤 (깜빡임 막기)
+    try {
+      const s = JSON.parse(localStorage.getItem('jungto.state') || '{}');
+      if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
+      if (s.fs) document.documentElement.style.setProperty('--fs', s.fs + 'px');
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <!-- 로그인 (Firebase를 연결하면) -->
+  <div class="login hidden" id="login">
+    <div class="logo big">Jungto<small>정토불교대학 강의 노트</small></div>
+    <p class="login-sub">내 계정에서만 볼 수 있어요.</p>
+    <button class="login-btn" id="loginBtn" type="button">구글로 로그인</button>
+    <p class="login-error hidden" id="loginError"></p>
+  </div>
+
+  <!-- 홈: 강의 목록 -->
+  <div id="home" class="wrap hidden">
+    <div class="home-top">
+      <div class="logo">Jungto<small>정토불교대학 강의 노트</small></div>
+      <button class="icon" id="homeOpt" type="button" aria-label="보기 설정"><svg viewBox="0 0 24 24"><path d="M4 19l4-12h1l4 12M5.5 15h6M15 19l2.5-7h.5l2.5 7M15.8 17h4"/></svg></button>
+    </div>
+    <button class="resume hidden" id="resume" type="button"></button>
+    <button class="bigcard" id="bigBtn" type="button"><b>큰 그림</b><span>여러 강의에 걸쳐 이어지는 주제 모아 보기</span><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <div class="list-h">강의 목록</div>
+    <div class="weeks" id="weeks"></div>
+    <div class="foot" id="foot"></div>
+  </div>
+
+  <!-- 읽기 -->
+  <div id="reader" class="hidden">
+    <div class="bar">
+      <button class="back" id="back" type="button" aria-label="목록으로"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ttl" id="ttl"></div>
+      <div class="tools">
+        <button class="icon" id="tocBtn" type="button" aria-label="목차"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+        <button class="icon" id="optBtn" type="button" aria-label="보기 설정"><svg viewBox="0 0 24 24"><path d="M4 19l4-12h1l4 12M5.5 15h6M15 19l2.5-7h.5l2.5 7M15.8 17h4"/></svg></button>
+      </div>
+      <div class="seg" id="seg"><button type="button" data-m="orig">원문</button><button type="button" data-m="exp">설명</button><button type="button" data-m="link">연결</button></div>
+      <div class="prog" id="prog"></div>
+    </div>
+    <div class="wrap"><article class="doc" id="doc"></article></div>
+  </div>
+
+  <!-- 큰 그림 -->
+  <div id="big" class="hidden">
+    <div class="bar plain">
+      <button class="back" id="bigBack" type="button" aria-label="목록으로"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ttl">큰 그림</div>
+      <div class="tools"></div>
+    </div>
+    <div class="wrap"><div class="doc" id="bigDoc"></div></div>
+  </div>
+
+  <!-- 목차 -->
+  <div class="ov" id="tocOv"><div class="sheet"><div class="grab"></div><h2 id="tocTitle">목차</h2><nav class="toc" id="toc"></nav></div></div>
+  <!-- 보기 설정 -->
+  <div class="ov" id="optOv"><div class="sheet"><div class="grab"></div><h2>보기 설정</h2>
+    <div class="opt"><span>글자 크기</span><div class="btns" id="fsBtns"><button type="button" data-fs="15">작게</button><button type="button" data-fs="17">보통</button><button type="button" data-fs="19">크게</button><button type="button" data-fs="21">더 크게</button></div></div>
+    <div class="opt"><span>화면</span><div class="btns" id="thBtns"><button type="button" data-th="light">밝게</button><button type="button" data-th="dark">어둡게</button><button type="button" data-th="auto">자동</button></div></div>
+    <div class="opt acct hidden" id="acct"><span id="acctEmail"></span><div class="btns"><button type="button" id="logoutBtn">로그아웃</button></div></div>
+    <div class="ver">Jungto v<span id="verNo"></span></div>
+  </div></div>
+
+  <div class="msg" id="msg"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="sync-config.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+  <script src="sync.js?v=1"></script>
+</body>
+</html>
