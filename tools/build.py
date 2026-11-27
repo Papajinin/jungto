@@ -120,6 +120,16 @@ def parse_md(text):
             blocks.append({'t': 'h%d' % min(lvl, 4), 'md': title})
             i += 1
             continue
+        if s.startswith('```'):
+            # 그림처럼 줄을 맞춘 부분 (화살표 흐름도 등)
+            buf = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith('```'):
+                buf.append(lines[i].rstrip())
+                i += 1
+            i += 1
+            blocks.append({'t': 'pre', 'md': '\n'.join(buf)})
+            continue
         if re.match(r'^-{3,}$', s) or re.match(r'^\*{3,}$', s):
             blocks.append({'t': 'hr'})
             i += 1
@@ -198,6 +208,8 @@ def render_block(b):
     t = b['t']
     if t in ('h2', 'h3', 'h4'):
         return f'<{t}>{inline(b["md"])}</{t}>'
+    if t == 'pre':
+        return '<pre class="flow">' + html.escape(b['md'], quote=False) + '</pre>'
     if t == 'hr':
         return ''
     if t == 'p':
@@ -274,7 +286,7 @@ def apply_diet(n, blocks, rules):
                 first_h2 += 1
             used.add(r)
             continue
-        if kind == 'K':
+        if kind in ('K', 'M'):
             used.add(r)
             continue
         a = norm(arg)
@@ -457,8 +469,12 @@ def build_orig(n, text):
     nonempty = [ln.strip() for ln in lines if ln.strip()]
     # 머리: "N강", 제목(1~2줄), 학습 목표
     k = 0
-    if re.match(r'^\d+강$', nonempty[0]):
+    unit = ''
+    if len(nonempty) > 1 and not re.match(r'^\d+강$', nonempty[0]) and re.match(r'^\d+강$', nonempty[1]):
+        unit = nonempty[0]   # 대단원 이름 (예: 인간 붓다)
         k = 1
+    if re.match(r'^\d+강$', nonempty[k]):
+        k += 1
     title_lines = []
     while k < len(nonempty) and nonempty[k] != '학습 목표':
         title_lines.append(nonempty[k])
@@ -471,6 +487,15 @@ def build_orig(n, text):
     while k < len(nonempty) and nonempty[k] in ('주제 질문 나누기', '법문 나누기', '수행 연습 나누기'):
         k += 1
     body = nonempty[k:]
+    # 빈 줄 바로 뒤에 오는 줄 (경전 인용 같은 긴 글이 앞 항목에 붙지 않게)
+    after_blank, prev_blank = [], False
+    for ln in lines:
+        if not ln.strip():
+            prev_blank = True
+            continue
+        after_blank.append(prev_blank)
+        prev_blank = False
+    after_blank = after_blank[k:]
 
     out, secs = [], []
     part_no, sub_no = 0, 0
@@ -572,9 +597,36 @@ def build_orig(n, text):
             else:
                 out.append(f'<p class="ci">{tagify(s)}</p>')
             continue
+        if s.startswith('- ') and ' | ' in s:
+            # 표 한 줄: "- 이름 : 값 | 칸 이름: 값 | …"
+            close_list()
+            cells = [c.strip() for c in s[2:].split(' | ')]
+            name, _, first = cells[0].partition(' : ')
+            heads, vals = ['', ''], [name.strip(), first.strip()]
+            for c in cells[1:]:
+                h, _, v = c.partition(':')
+                heads.append(h.strip())
+                vals.append(v.strip())
+            row = '<tr>' + ''.join(f'<td>{tagify(v)}</td>' for v in vals) + '</tr>'
+            if out and out[-1].endswith('</tbody></table></div>'):
+                out[-1] = out[-1][:-len('</tbody></table></div>')] + row + '</tbody></table></div>'
+            else:
+                head = '<tr>' + ''.join(f'<th>{tagify(h)}</th>' for h in heads) + '</tr>'
+                out.append(f'<div class="tbl"><table><thead>{head}</thead><tbody>{row}</tbody></table></div>')
+            continue
         if s.startswith('- ') or s.startswith('* '):
             close_list()
             out.append(f'<p class="dash">{tagify(s[2:])}</p>')
+            continue
+        # 경전 이름 『…』 줄
+        if s.startswith('『') and s.endswith('』'):
+            close_list()
+            out.append(f'<p class="src">{tagify(s)}</p>')
+            continue
+        # 빈 줄 뒤에서 시작하는 긴 글은 새 문단 (앞 목록에 붙이지 않음)
+        if after_blank[idx] and len(s) > 60:
+            close_list()
+            out.append(f'<p class="line">{tagify(s)}</p>')
             continue
         # 보통 줄: 목록 안이면 앞 항목에 이어 붙임
         if cur_list and out[-1].endswith('</li>'):
@@ -588,7 +640,7 @@ def build_orig(n, text):
     if sec_open:
         out.append('</section>')
     title = ' '.join(title_lines)
-    return ''.join(out), secs, title, goals, body
+    return ''.join(out), secs, title, goals, unit
 
 
 # ---------------------------------------------------------------- 원문 ↔ 설명 맞추기
@@ -639,18 +691,28 @@ def main():
         if os.path.exists(os.path.join(ROOT, 'data', 'diet.json')) else {}
     os.makedirs(OUT, exist_ok=True)
     index = []
+    unit, no = '실천적 불교사상', 0
     for n in range(1, 41):
         if not raw_path(n, 'orig')[0] or not raw_path(n, 'exp')[0]:
             continue
-        orig_html, orig_secs, title, goals, _ = build_orig(n, load_orig(n))
+        orig_html, orig_secs, title, goals, unit_name = build_orig(n, load_orig(n))
+        # 대단원: 원문 맨 위에 이름이 있으면 새 단원 시작, 강의 번호는 단원 안에서 1부터
+        if unit_name and unit_name != unit:
+            unit, no = unit_name, 0
+        no += 1
         exp_html, exp_secs, link, exp_title = build_exp(n, load_exp(n), diet.get(str(n), []))
         link_html, link_secs = build_link(n, link, exp_secs)
         emap = map_sections(exp_secs, orig_html, orig_secs)
+        for r in diet.get(str(n), []):
+            # M: 자동 짝이 틀린 곳 바로잡기 (예: "M: e4-1=o3-1")
+            if r.startswith('M:'):
+                e, _, o = r[2:].strip().partition('=')
+                emap[e.strip()] = o.strip()
         for s in exp_secs:
             s.pop('text', None)
             s.pop('quotes', None)
         doc = {
-            'n': n, 'title': title, 'goals': goals,
+            'n': n, 'unit': unit, 'no': no, 'title': title, 'goals': goals,
             'orig': orig_html, 'origToc': orig_secs,
             'exp': exp_html, 'expToc': exp_secs,
             'link': link_html, 'linkToc': link_secs,

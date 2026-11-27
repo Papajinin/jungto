@@ -16,6 +16,11 @@ const $ = id => document.getElementById(id);
 const home = $('home'), reader = $('reader'), big = $('big'), doc = $('doc');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const lec = n => LECS.find(l => l.n === n);
+// 대단원: 1~12는 실천적 불교사상, 그 뒤는 단원마다 1강부터 (옛 내용엔 unit·no가 없어 n을 씀)
+const UNIT1 = '실천적 불교사상';
+const unitOf = L => L.unit || UNIT1;
+const noOf = L => L.no || L.n;
+const nm = L => `${noOf(L)}강`;
 
 function setContent(lectures, bigpicture) {
   LECS = lectures.slice().sort((a, b) => a.n - b.n);
@@ -43,16 +48,19 @@ function showHome() {
   const L = S.last && lec(S.last.n);
   if (L) {
     const p = S.pos[L.n] || {};
-    r.innerHTML = `<small>이어 읽기</small><b>${L.n}강 · ${esc(L.title)}</b><span>${MODES[p.mode] || '설명'} · ${esc(labelOf(L, p.mode, p.sec) || '처음부터')}</span>`;
+    r.innerHTML = `<small>이어 읽기</small><b>${unitOf(L) === UNIT1 ? '' : esc(unitOf(L)) + ' '}${nm(L)} · ${esc(L.title)}</b><span>${MODES[p.mode] || '설명'} · ${esc(labelOf(L, p.mode, p.sec) || '처음부터')}</span>`;
     r.classList.remove('hidden');
   } else r.classList.add('hidden');
   $('bigBtn').classList.toggle('hidden', !BIG);
+  let lastUnit = null;
   $('weeks').innerHTML = LECS.map(l => {
     const st = S.done[l.n] ? '✓ 다 읽음' : (S.pos[l.n] ? '읽는 중' : '');
-    return `<button class="week${S.done[l.n] ? ' done' : ''}" type="button" data-open="${l.n}"><span class="no">${l.n}</span><span class="t"><b>${esc(l.title)}</b></span><span class="st">${st}</span></button>`;
+    const head = unitOf(l) !== lastUnit ? `<div class="unit-h">${esc(unitOf(l))}</div>` : '';
+    lastUnit = unitOf(l);
+    return head + `<button class="week${S.done[l.n] ? ' done' : ''}" type="button" data-open="${l.n}"><span class="no">${noOf(l)}</span><span class="t"><b>${esc(l.title)}</b></span><span class="st">${st}</span></button>`;
   }).join('');
   const nDone = LECS.filter(l => S.done[l.n]).length;
-  $('foot').textContent = LECS.length ? `${LECS.length}강까지 들어 있어요 · 다 읽은 강의 ${nDone}개` : '아직 넣은 강의가 없어요';
+  $('foot').textContent = LECS.length ? `강의 ${LECS.length}개 · 다 읽은 강의 ${nDone}개` : '아직 넣은 강의가 없어요';
   window.scrollTo(0, 0);
 }
 
@@ -83,7 +91,7 @@ function openLecture(n, mode, sec) {
   S.last = { n };
   save();
   showOnly(reader);
-  $('ttl').textContent = `${L.n}강 · ${L.title}`;
+  $('ttl').textContent = `${nm(L)} · ${L.title}`;
   render();
   const target = sec || (mode ? null : p.sec);
   if (target) goSec(target); else window.scrollTo(0, 0);
@@ -92,7 +100,7 @@ function openLecture(n, mode, sec) {
 
 function render() {
   const L = cur;
-  const top = `<div class="kicker">${L.n}강</div><h1>${esc(L.title)}</h1>` +
+  const top = `<div class="kicker">${esc(unitOf(L))} · ${nm(L)}</div><h1>${esc(L.title)}</h1>` +
     (L.goals && L.goals.length ? `<div class="box"><h2>학습 목표</h2><ul>${L.goals.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div>` : '');
   let body;
   if (S.mode === 'orig') body = L.orig;
@@ -103,8 +111,8 @@ function render() {
   } else body = L.exp;
   const next = lec(L.n + 1);
   doc.innerHTML = top + body +
-    `<button class="done-btn" id="doneBtn" type="button">${S.done[L.n] ? `${L.n}강 다 읽음 ✓` : `${L.n}강 다 읽음`}</button>` +
-    (next ? `<button class="next-btn" id="nextBtn" type="button">다음 강의 · ${next.n}강 ${esc(next.title)}</button>` : '');
+    `<button class="done-btn" id="doneBtn" type="button">${S.done[L.n] ? `${nm(L)} 다 읽음 ✓` : `${nm(L)} 다 읽음`}</button>` +
+    (next ? `<button class="next-btn" id="nextBtn" type="button">다음 강의 · ${unitOf(next) !== unitOf(L) ? esc(unitOf(next)) + ' ' : ''}${nm(next)} ${esc(next.title)}</button>` : '');
   document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.m === S.mode));
   updateProg();
 }
@@ -196,7 +204,7 @@ doc.addEventListener('click', e => {
   if (e.target.id === 'doneBtn') {
     S.done[cur.n] = !S.done[cur.n];
     save();
-    e.target.textContent = S.done[cur.n] ? `${cur.n}강 다 읽음 ✓` : `${cur.n}강 다 읽음`;
+    e.target.textContent = S.done[cur.n] ? `${nm(cur)} 다 읽음 ✓` : `${nm(cur)} 다 읽음`;
     toast(S.done[cur.n] ? '다 읽음으로 표시했어요' : '다 읽음 표시를 지웠어요');
   }
   if (e.target.id === 'nextBtn') openLecture(cur.n + 1, S.mode);
@@ -210,7 +218,7 @@ function showBig() {
   showOnly(big);
   $('bigDoc').innerHTML = `<p class="big-intro">강의를 넘나들며 이어지는 주제예요. 누르면 그 강의 설명의 그 자리로 가요.</p>` +
     BIG.themes.map(t => `<div class="theme"><h3>${esc(t.title)}</h3>${t.note ? `<p class="tnote">${esc(t.note)}</p>` : ''}` +
-      t.steps.map(s => `<button class="step" type="button" data-n="${s.n}" data-sec="${esc(s.sec || '')}"${lec(s.n) ? '' : ' disabled'}><span class="sn">${s.n}강</span><span>${esc(s.text)}</span></button>`).join('') +
+      t.steps.map(s => `<button class="step" type="button" data-n="${s.n}" data-sec="${esc(s.sec || '')}"${lec(s.n) ? '' : ' disabled'}><span class="sn">${lec(s.n) ? nm(lec(s.n)) : s.n + '강'}</span><span>${esc(s.text)}</span></button>`).join('') +
       `</div>`).join('');
   window.scrollTo(0, 0);
 }

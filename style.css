@@ -46,6 +46,8 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .weeks { background: var(--card); border-radius: 16px; overflow: hidden; }
 .week { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 14px 16px; }
 .week + .week { border-top: 1px solid var(--line); }
+.unit-h { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--accent); }
+.week + .unit-h { border-top: 6px solid var(--bg); padding-top: 18px; }
 .week .no { flex: none; width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
 .week.done .no { background: var(--accent); color: var(--on-accent); }
 .week .t { flex: 1; min-width: 0; }
@@ -153,3 +155,5 @@ tr:last-child td { border-bottom: 0; }
 .splash-name { position: absolute; left: 0; right: 0; bottom: calc(26px + env(safe-area-inset-bottom)); text-align: center; font-weight: 700; letter-spacing: .3em; font-size: 13px; color: #555; }
 @keyframes splashIn { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: blur(0); } }
 @keyframes splashOut { from { opacity: 1; filter: blur(0); } to { opacity: 0; filter: blur(8px); } }
+.doc pre.flow { overflow-x: auto; margin: 10px 0; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font: 12px/1.6 ui-monospace, Menlo, monospace; color: var(--fg); }
+.doc p.src { text-align: right; font-size: .85em; color: var(--sub); margin: 2px 0 14px; }
